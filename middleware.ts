@@ -10,16 +10,20 @@ export default auth((req) => {
   
   if (isAuthPage) {
     if (isAuth) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+      const url = req.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
     }
-    return null;
+    return NextResponse.next();
   }
 
   if (!isAuth && req.nextUrl.pathname.startsWith("/dashboard")) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
   }
 
-  return null;
+  return NextResponse.next();
 });
 
 export const config = {
