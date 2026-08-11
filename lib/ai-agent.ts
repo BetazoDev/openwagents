@@ -59,6 +59,16 @@ export async function runAgent(leadId: string, agencyId: string, message: string
 
   const systemInstructions = agent.systemPrompt || "Eres un asistente virtual.";
 
+  const searchCatalogSchema = z.object({
+    query: z.string().describe("Término de búsqueda (ej. 'departamento centro', 'playa')"),
+    maxPrice: z.number().optional().describe("Precio máximo"),
+  });
+
+  const qualifyLeadSchema = z.object({
+    reason: z.string().describe("Razón por la cual se califica"),
+    summary: z.string().describe("Resumen del perfil del cliente (presupuesto, necesidades)"),
+  });
+
   // 5. Ejecutar LLM con Tools
   try {
     const { text, toolCalls } = await generateText({
@@ -68,21 +78,19 @@ export async function runAgent(leadId: string, agencyId: string, message: string
       tools: {
         searchCatalog: tool({
           description: "Busca propiedades o paquetes de viaje en el catálogo de la agencia.",
-          parameters: z.object({
-            query: z.string().describe("Término de búsqueda (ej. 'departamento centro', 'playa')"),
-            maxPrice: z.number().optional().describe("Precio máximo"),
-          }),
-          execute: async ({ query, maxPrice }: { query: string; maxPrice?: number }) => {
+          parameters: searchCatalogSchema,
+          // @ts-expect-error Type inference issue with Prisma return types and AI SDK
+          execute: async (args: z.infer<typeof searchCatalogSchema>) => {
             const items = await prisma.catalogItem.findMany({
               where: {
                 agencyId,
                 isActive: true,
                 OR: [
-                  { title: { contains: query, mode: "insensitive" } },
-                  { description: { contains: query, mode: "insensitive" } },
-                  { location: { contains: query, mode: "insensitive" } },
+                  { title: { contains: args.query, mode: "insensitive" } },
+                  { description: { contains: args.query, mode: "insensitive" } },
+                  { location: { contains: args.query, mode: "insensitive" } },
                 ],
-                ...(maxPrice ? { price: { lte: maxPrice } } : {}),
+                ...(args.maxPrice ? { price: { lte: args.maxPrice } } : {}),
               },
               take: 5,
             });
@@ -91,17 +99,15 @@ export async function runAgent(leadId: string, agencyId: string, message: string
         }),
         qualifyLead: tool({
           description: "Marca al lead como CALIFICADO cuando muestra interés real y cumple perfil.",
-          parameters: z.object({
-            reason: z.string().describe("Razón por la cual se califica"),
-            summary: z.string().describe("Resumen del perfil del cliente (presupuesto, necesidades)"),
-          }),
-          execute: async ({ reason, summary }: { reason: string; summary: string }) => {
+          parameters: qualifyLeadSchema,
+          // @ts-expect-error Type inference issue with Prisma return types and AI SDK
+          execute: async (args: z.infer<typeof qualifyLeadSchema>) => {
             await prisma.lead.update({
               where: { id: lead.id },
               data: {
                 status: "QUALIFIED",
-                aiSummary: summary,
-                notes: reason,
+                aiSummary: args.summary,
+                notes: args.reason,
               }
             });
             return { success: true, message: "Lead calificado exitosamente." };
