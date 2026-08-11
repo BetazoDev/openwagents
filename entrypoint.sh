@@ -1,10 +1,7 @@
 #!/bin/sh
-set -e
 
 echo "Sincronizando base de datos Prisma..."
-# Usamos db push para aplicar cambios sin historial de migraciones en modo rápido. 
-# accept-data-loss evita prompts interactivos que bloquean Docker
-npx prisma db push --accept-data-loss
+npx --yes prisma@7.9.1 db push --skip-generate --accept-data-loss || echo "⚠️ Advertencia: Prisma db push falló. Revisa la conexión a la base de datos."
 
 echo "Iniciando servidor de InmobiliarIA..."
 exec "$@"
